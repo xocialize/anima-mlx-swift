@@ -72,8 +72,16 @@ public final class AnimaT2IPackage: ModelPackage {
     public nonisolated init(configuration: Configuration) { self.configuration = configuration }
 
     private func file(_ name: String) -> URL {
-        let root = configuration.modelsRootDirectory.map { $0.appendingPathComponent(configuration.snapshotPath) }
-            ?? URL(fileURLWithPath: configuration.snapshotPath)
+        // An absolute `snapshotPath` points at an explicit local snapshot (out-of-store, e.g. the
+        // NC weights staged on disk) and wins — even though the engine stamps `modelsRootDirectory`
+        // onto every ModelStorable config. A relative `snapshotPath` resolves under the model store.
+        let root: URL
+        if configuration.snapshotPath.hasPrefix("/") {
+            root = URL(fileURLWithPath: configuration.snapshotPath)
+        } else {
+            root = configuration.modelsRootDirectory.map { $0.appendingPathComponent(configuration.snapshotPath) }
+                ?? URL(fileURLWithPath: configuration.snapshotPath)
+        }
         return root.appendingPathComponent(name)
     }
 
