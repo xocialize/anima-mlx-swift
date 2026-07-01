@@ -17,7 +17,9 @@ public struct CosmosDiTConfig {
     public var adalnLoraDim = 256
     public var maxSize = (128, 240, 240)
     public var patchSize = (1, 2, 2)
-    public var ropeScale = (2.0, 1.0, 1.0)
+    public var ropeScale = (1.0, 4.0, 4.0)   // (t,h,w) — comfy Anima rope_*_extrapolation_ratio (model_detection.py:
+                                             // in_channels==16 → h/w=4.0). Was (2,1,1) [diffusers video default],
+                                             // which aliased RoPE above ~256² → tiled garbage at native 512²+.
     public var baseFps = 24
     public var concatPaddingMask = true
     public var hiddenSize: Int { numAttentionHeads * attentionHeadDim }
