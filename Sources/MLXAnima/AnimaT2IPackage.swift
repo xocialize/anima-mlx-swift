@@ -7,6 +7,7 @@ import ImageIO
 import UniformTypeIdentifiers
 import Anima
 import MLX
+import MLXProfiling
 import MLXRandom
 import MLXToolKit
 
@@ -123,6 +124,10 @@ public final class AnimaT2IPackage: ModelPackage {
 
     private func generate(pipeline: AnimaPipeline, tokenizer: AnimaTokenizer, prompt: String, negative: String,
                           width: Int, height: Int, steps: Int, cfg: Float, seed: UInt64) throws -> ([UInt8], Int, Int) {
+        // Stage-level MLX profiling (MLX_PROFILE=1): encode + per-step denoise spans live in the
+        // Core; the run summary normalizes to ms/step.
+        let prof = MLXProfiler.shared
+        prof.beginRun("anima imageGenerate steps=\(steps) \(width)x\(height)")
         func idArr(_ a: [Int]) -> MLXArray { MLXArray(a.map(Int32.init)).reshaped(1, a.count) }
         let (cq, ct) = tokenizer.encode(prompt)
         let (uq, ut) = tokenizer.encode(negative)
@@ -133,9 +138,13 @@ public final class AnimaT2IPackage: ModelPackage {
         let latW = width / VAE_SPATIAL
         let noise = MLXRandom.normal([1, 16, 1, lat, latW]).asType(.bfloat16)
         let x0 = pipeline.sample(noise: noise, condCtx: cond, uncondCtx: unc, sigmas: flowSigmas(steps), cfg: cfg)
+        // Manual span around the existing eval — `decode` is lazy; its compute realizes here.
+        let vSpan = prof.begin("vae", "decode")
         let img = pipeline.decode(x0)                       // [1,H,W,3] in [0,1]
         eval(img)
+        prof.end(vSpan)
         let pixels = (img[0] * 255).asType(.uint8).asArray(UInt8.self)
+        prof.endRun(denominators: ["step": Double(steps)])
         return (pixels, width, height)
     }
 

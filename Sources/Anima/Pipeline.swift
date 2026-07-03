@@ -4,6 +4,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXProfiling
 
 public let PAD_TO = 512
 public let VAE_SPATIAL = 8
@@ -44,8 +45,12 @@ public final class AnimaPipeline {
 
     /// qwenIds [1,Lq], t5Ids [1,Lt5] -> DiT cross-attn context [1,512,1024].
     public func encodeContext(_ qwenIds: MLXArray, _ t5Ids: MLXArray) -> MLXArray {
-        let src = qwen(qwenIds)
-        return adapter(src, t5Ids, padTo: PAD_TO)
+        // Coarse span (MLX_PROFILE=1). The encode graph has no eval of its own — its compute
+        // realizes at denoise step 0's eval, so this row times graph build only.
+        MLXProfiler.shared.region("encode", "context") {
+            let src = qwen(qwenIds)
+            return adapter(src, t5Ids, padTo: PAD_TO)
+        }
     }
 
     /// Deterministic Euler over the flow CONST schedule. noise/contexts on the model stream.
@@ -54,6 +59,8 @@ public final class AnimaPipeline {
         var x = Float(sigmas[0]) * noise
         let ctx = concatenated([condCtx, uncondCtx], axis: 0)
         for i in 0 ..< (sigmas.count - 1) {
+            let span = MLXProfiler.shared.begin("denoise", "step", index: i,
+                note: String(format: "σ=%.3f", sigmas[i]))
             let s = Float(sigmas[i])
             let xb = concatenated([x, x], axis: 0)
             let t = MLXArray([s, s])
@@ -63,6 +70,7 @@ public final class AnimaPipeline {
             let vCfg = vUnc + cfg * (vCond - vUnc)
             x = x + vCfg * (Float(sigmas[i + 1]) - s)
             eval(x)
+            MLXProfiler.shared.end(span)
         }
         return x
     }
