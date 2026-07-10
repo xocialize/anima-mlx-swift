@@ -105,11 +105,15 @@ public final class AnimaT2IPackage: ModelPackage {
     public func unload() async { pipeline = nil; tokenizer = nil }
 
     public func run(_ request: any CapabilityRequest) async throws -> any CapabilityResponse {
+        // CAN-1: the entry checkpoint is the FIRST act of run() — before notLoaded validation
+        // (engine ≥ 0.27.0). Mid-run cadence: post-encode + pre-decode seams in generate()
+        // below, per-denoise-step `Task.isCancelled` break in AnimaPipeline.sample;
+        // CancellationError is rethrown unchanged.
+        try Task.checkCancellation()
         guard let pipeline, let tokenizer else { throw PackageError.notLoaded }
         guard request.capability == .textToImage, let t2i = request as? T2IRequest else {
             throw PackageError.unsupportedCapability(request.capability)
         }
-        try Task.checkCancellation()
         let (pixels, w, h) = try generate(
             pipeline: pipeline, tokenizer: tokenizer,
             prompt: t2i.prompt, negative: t2i.negativePrompt ?? "",
@@ -133,11 +137,16 @@ public final class AnimaT2IPackage: ModelPackage {
         let (uq, ut) = tokenizer.encode(negative)
         let cond = pipeline.encodeContext(idArr(cq), idArr(ct))
         let unc = pipeline.encodeContext(idArr(uq), idArr(ut))
+        // CAN seam: conditioning encoded, before the denoise loop.
+        try Task.checkCancellation()
         MLXRandom.seed(seed)
         let lat = height / VAE_SPATIAL
         let latW = width / VAE_SPATIAL
         let noise = MLXRandom.normal([1, 16, 1, lat, latW]).asType(.bfloat16)
         let x0 = pipeline.sample(noise: noise, condCtx: cond, uncondCtx: unc, sigmas: flowSigmas(steps), cfg: cfg)
+        // CAN seam: denoise done (or bailed per step on cancel), before the monolithic VAE
+        // decode (one MLX eval) — rethrows CancellationError unchanged.
+        try Task.checkCancellation()
         // Manual span around the existing eval — `decode` is lazy; its compute realizes here.
         let vSpan = prof.begin("vae", "decode")
         let img = pipeline.decode(x0)                       // [1,H,W,3] in [0,1]

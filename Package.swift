@@ -16,7 +16,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.30.0"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6"),
-        .package(url: "https://github.com/xocialize/mlx-engine-swift", from: "0.3.0"),
+        // ≥0.27.0 for the CAN cancellation gate (MLXServeConformance.CancellationConformance).
+        .package(url: "https://github.com/xocialize/mlx-engine-swift", from: "0.27.0"),
         .package(url: "https://github.com/xocialize/mlx-profiling.git", from: "0.1.0"),
     ],
     targets: [
@@ -57,7 +58,12 @@ let package = Package(
         ),
         .testTarget(
             name: "MLXAnimaTests",
-            dependencies: ["MLXAnima", .product(name: "MLXToolKit", package: "mlx-engine-swift")],
+            dependencies: [
+                "MLXAnima",
+                .product(name: "MLXToolKit", package: "mlx-engine-swift"),
+                // The engine's executable CAN gate, run from this package's own suite.
+                .product(name: "MLXServeConformance", package: "mlx-engine-swift"),
+            ],
             path: "Tests/MLXAnimaTests"
         ),
     ]

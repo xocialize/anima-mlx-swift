@@ -59,6 +59,9 @@ public final class AnimaPipeline {
         var x = Float(sigmas[0]) * noise
         let ctx = concatenated([condCtx, uncondCtx], axis: 0)
         for i in 0 ..< (sigmas.count - 1) {
+            // Cooperative cancellation: bail per denoise step (non-throwing core API — the
+            // MLXAnima wrapper's post-sample `try Task.checkCancellation()` rethrows).
+            if Task.isCancelled { break }
             let span = MLXProfiler.shared.begin("denoise", "step", index: i,
                 note: String(format: "σ=%.3f", sigmas[i]))
             let s = Float(sigmas[i])
