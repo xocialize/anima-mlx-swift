@@ -173,13 +173,17 @@ do {
         exit(ok ? 0 : 1)
 
     case "--generate":
-        // --generate <prompt> <distDir> <out.png> [steps] [cfg] [size] [seed]
-        guard args.count >= 5 else { print("usage: --generate <prompt> <distDir> <out.png> [steps] [cfg] [size] [seed]"); exit(2) }
+        // --generate <prompt> <distDir> <out.png> [steps] [cfg] [size] [seed] [sampler] [negative]
+        //   sampler: er_sde (DEFAULT — required for real images) | euler (A/B only, blob garbage)
+        //   negative: defaults to the reference quality-tag negative (empty neg collapses 1024²)
+        guard args.count >= 5 else { print("usage: --generate <prompt> <distDir> <out.png> [steps] [cfg] [size] [seed] [er_sde|euler] [negative]"); exit(2) }
         let prompt = args[2], dir = args[3], outPath = args[4]
-        let steps = args.count > 5 ? Int(args[5])! : 24
+        let steps = args.count > 5 ? Int(args[5])! : 30
         let cfg = args.count > 6 ? Float(args[6])! : 5.0
         let size = args.count > 7 ? Int(args[7])! : 512
         let seed = args.count > 8 ? UInt64(args[8])! : 1234
+        let sampler = args.count > 9 ? AnimaSampler(rawValue: args[9])! : .erSde
+        let negative = args.count > 10 ? args[10] : DEFAULT_NEGATIVE_PROMPT
         let d = URL(fileURLWithPath: dir)
         let pipe = try AnimaPipeline.load(
             transformer: d.appendingPathComponent("transformer-bf16.safetensors"),
@@ -188,18 +192,26 @@ do {
             vae: d.appendingPathComponent("vae-bf16.safetensors"), dtype: .bfloat16)
         let tok = try await AnimaTokenizer.load()
         func idArr(_ a: [Int]) -> MLXArray { MLXArray(a.map(Int32.init)).reshaped(1, a.count) }
-        let (cq, ct) = tok.encode(prompt); let (uq, ut) = tok.encode("")
+        let (cq, ct) = tok.encode(prompt); let (uq, ut) = tok.encode(negative)
         let cond = pipe.encodeContext(idArr(cq), idArr(ct))
         let unc = pipe.encodeContext(idArr(uq), idArr(ut))
         MLXRandom.seed(seed)
         let lat = size / VAE_SPATIAL
         let noise = MLXRandom.normal([1, 16, 1, lat, lat]).asType(.bfloat16)
-        let x0 = pipe.sample(noise: noise, condCtx: cond, uncondCtx: unc, sigmas: flowSigmas(steps), cfg: cfg)
+        let x0: MLXArray
+        switch sampler {
+        case .erSde:
+            x0 = pipe.sampleErSde(noise: noise, condCtx: cond, uncondCtx: unc,
+                                  sigmas: flowSigmas(steps), cfg: cfg, seed: seed)
+        case .euler:
+            x0 = pipe.sample(noise: noise, condCtx: cond, uncondCtx: unc, sigmas: flowSigmas(steps), cfg: cfg)
+        }
         let img = pipe.decode(x0); eval(img)
         let nan = MLX.any(img .!= img).item(Bool.self)
         try savePNG(img.asType(.float32), to: outPath)
-        print(String(format: "[generate] %dx%d steps=%d cfg=%.1f nan=%@ peak=%.2fGB -> %@",
-                     size, size, steps, cfg, nan ? "true" : "false", Double(GPU.peakMemory) / 1e9, outPath))
+        print(String(format: "[generate] %dx%d steps=%d cfg=%.1f sampler=%@ nan=%@ peak=%.2fGB -> %@",
+                     size, size, steps, cfg, sampler.rawValue, nan ? "true" : "false",
+                     Double(GPU.peakMemory) / 1e9, outPath))
         exit(0)
 
     case "--package-gate":

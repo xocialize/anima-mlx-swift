@@ -116,7 +116,9 @@ public final class AnimaT2IPackage: ModelPackage {
         }
         let (pixels, w, h) = try generate(
             pipeline: pipeline, tokenizer: tokenizer,
-            prompt: t2i.prompt, negative: t2i.negativePrompt ?? "",
+            // Empty negative collapses 1024² (confetti) — default to the reference quality-tag
+            // negative when the caller does not supply one (root-caused 2026-07-22).
+            prompt: t2i.prompt, negative: t2i.negativePrompt ?? DEFAULT_NEGATIVE_PROMPT,
             width: t2i.width ?? 512, height: t2i.height ?? 512,
             steps: t2i.steps ?? configuration.defaultSteps,
             cfg: t2i.guidanceScale.map(Float.init) ?? configuration.defaultGuidanceScale,
@@ -143,7 +145,10 @@ public final class AnimaT2IPackage: ModelPackage {
         let lat = height / VAE_SPATIAL
         let latW = width / VAE_SPATIAL
         let noise = MLXRandom.normal([1, 16, 1, lat, latW]).asType(.bfloat16)
-        let x0 = pipeline.sample(noise: noise, condCtx: cond, uncondCtx: unc, sigmas: flowSigmas(steps), cfg: cfg)
+        // er_sde is the DEFAULT (and required) sampler — the euler placeholder produces
+        // structural blob garbage at every size (root-caused 2026-07-22).
+        let x0 = pipeline.sampleErSde(noise: noise, condCtx: cond, uncondCtx: unc,
+                                      sigmas: flowSigmas(steps), cfg: cfg, seed: seed)
         // CAN seam: denoise done (or bailed per step on cancel), before the monolithic VAE
         // decode (one MLX eval) — rethrows CancellationError unchanged.
         try Task.checkCancellation()

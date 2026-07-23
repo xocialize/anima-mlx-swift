@@ -1,6 +1,8 @@
 // Qwen3-0.6B as Anima's text encoder — 1:1 transpose of anima_mlx/models/qwen3_te.py.
-// Causal; returns the LAST decoder-layer hidden BEFORE the final norm (comfy
-// layer_norm_hidden_state=False). GQA 16:8, head_dim 128 (≠ hidden 1024), QK-norm, rope θ1e6.
+// Causal; returns the last hidden AFTER the final RMSNorm (comfy layer="last" = llama.py
+// outputs[0], post-model.norm; layer_norm_hidden_state=False only affects intermediate taps —
+// fixed 2026-07-22, the pre-norm tap washed out long prompts). GQA 16:8, head_dim 128
+// (≠ hidden 1024), QK-norm, rope θ1e6.
 import Foundation
 import MLX
 import MLXNN
@@ -105,12 +107,15 @@ final class Qwen3Layer: Module {
     }
 }
 
-/// Wraps the `model.*` namespace (embed_tokens/layers/norm); returns PRE-final-norm last hidden.
+/// Wraps the `model.*` namespace (embed_tokens/layers/norm); returns the POST-final-RMSNorm
+/// last hidden. Root-caused 2026-07-22: comfy `layer="last"` takes llama.py `outputs[0]`, which
+/// is post-`self.norm(x)`; `layer_norm_hidden_state=False` only affects intermediate-layer taps.
+/// The earlier PRE-norm tap (hidden std ~25 vs ~3.8) made long positive prompts wash out.
 public final class Qwen3TextEncoder: Module {
     let c: Qwen3Config
     @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
     @ModuleInfo(key: "layers") var layers: [Qwen3Layer]
-    @ModuleInfo(key: "norm") var norm: RMSNorm  // held but NOT applied to the output
+    @ModuleInfo(key: "norm") var norm: RMSNorm
 
     public init(_ c: Qwen3Config = Qwen3Config()) {
         self.c = c
@@ -126,7 +131,7 @@ public final class Qwen3TextEncoder: Module {
         let (cosT, sinT) = ropeTables(s, c.headDim, c.ropeTheta)
         let mask = causalAdditiveMask(s, dtype: x.dtype)
         for layer in layers { x = layer(x, cosT, sinT, mask) }
-        return x  // pre-final-norm
+        return norm(x)  // POST-final-norm (== comfy layer="last" outputs[0])
     }
 }
 

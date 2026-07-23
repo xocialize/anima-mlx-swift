@@ -42,11 +42,33 @@ Weights (bf16 + int4, NC-flagged): **https://huggingface.co/xocialize/anima-mlx*
 
 Footprints (measured Swift peak @512²): **bf16 8.0 GB / int4 6.5 GB**.
 
+Note: the TE / e2e rows were gated against PRE-norm TE goldens; after the 2026-07-22 post-norm
+tap fix (see Sampling below) those goldens are stale until the Python rung regenerates them —
+the numbers still establish that the transpose matched the then-reference.
+
 ## Sampling
 
 ComfyUI `ModelType.FLOW`: `CONST` prediction + `ModelSamplingDiscreteFlow(shift=3, multiplier=1)`
 → `sigma(t) = 3t/(1+2t)`, **DiT timestep == sigma ∈ [0,1]**, Wan21 latent denorm before decode.
 CFG 4–5. Tokenizers: Qwen2.5 (raw BPE, pad 151643) + T5-v1.1 SentencePiece (trailing eos).
+
+**Sampler = `er_sde` (default, REQUIRED).** Root-caused 2026-07-22 (see anima-mlx `PIPELINE.md`):
+the deterministic euler placeholder produces structural blob garbage at **every** size for this
+model — the earlier "coherent 512²" eyeball gate was mis-calibrated and passed the blob class.
+`sampleErSde` is a 1:1 transpose of the Python rung's `sample_er_sde` (ComfyUI k_diffusion
+VP ER-SDE-Solver-3, arXiv:2309.06169); per-step noise comes from a deterministic **CPU-side**
+gaussian stream (`GaussianRNG`) — MLX random ops built lazily inside the denoise loop yield
+correlated draws → structured artifacts. euler is kept for A/B only.
+
+**Negative prompt defaults to the reference quality-tag negative** (`worst quality, low quality,
+score_1, score_2, score_3, blurry, jpeg artifacts`) — an empty negative collapses 1024² into
+confetti.
+
+**Text encoder tap = POST-final-RMSNorm** (fixed 2026-07-22). Comfy `layer="last"` returns
+llama.py `outputs[0]`, which is post-`model.norm`; `layer_norm_hidden_state=False` only affects
+intermediate-layer taps. The original pre-norm tap (hidden std ~25 vs ~3.8) made long positive
+prompts (~30+ tokens) wash out and left short-prompt renders merely "coherent" instead of
+ComfyUI-class. With the post-norm tap, long danbooru-style prompts render correctly.
 
 ## Quick start
 
