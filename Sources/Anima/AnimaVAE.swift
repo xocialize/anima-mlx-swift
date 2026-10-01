@@ -10,6 +10,7 @@
 
 import Foundation
 import MLX
+import MLXExactConv
 import MLXNN
 
 /// Causal 3D conv: time padded only at the front (2*pad), space symmetrically.
@@ -36,7 +37,9 @@ public final class QwenCausalConv3d: Module {
                 IntOrPair([padHW, padHW]), IntOrPair([0, 0]),
             ])
         }
-        return conv(x)
+        // mlx-swift 0.32 splits small-depth conv3d into per-frame conv2d that can take the lossy
+        // Winograd path (mlx#3785); MLXExactConv keeps those shapes on implicit GEMM.
+        return ExactConv.conv3d(x, weight: conv.weight, bias: conv.bias)
     }
 }
 

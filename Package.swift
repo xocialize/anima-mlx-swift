@@ -19,11 +19,13 @@ let package = Package(
         // ≥0.27.0 for the CAN cancellation gate (MLXServeConformance.CancellationConformance).
         .package(url: "https://github.com/xocialize/mlx-engine-swift", from: "0.27.0"),
         .package(url: "https://github.com/xocialize/mlx-profiling.git", from: "0.1.0"),
+        .package(url: "https://github.com/xocialize/mlx-exact-conv-swift", from: "0.1.0"),
     ],
     targets: [
         .target(
             name: "Anima",
             dependencies: [
+                .product(name: "MLXExactConv", package: "mlx-exact-conv-swift"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXFast", package: "mlx-swift"),
