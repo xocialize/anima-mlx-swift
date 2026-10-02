@@ -45,7 +45,7 @@ do {
     switch args[1] {
     case "--vae-gate":
         guard args.count >= 4 else { print("usage: --vae-gate <vae> <golden>"); exit(2) }
-        Device.setDefault(device: .cpu)  // CPU stream for tight parity
+        Device.setDefault(device: Device(.cpu))  // CPU stream for tight parity
         let vae = try AnimaWeights.loadVAE(file: URL(fileURLWithPath: args[2]), dtype: .float32)
         FileHandle.standardError.write("[vae] loaded (strict key match)\n".data(using: .utf8)!)
         let golden = try MLX.loadArrays(url: URL(fileURLWithPath: args[3]))
@@ -62,7 +62,7 @@ do {
         exit(ok ? 0 : 1)
     case "--te-gate":
         guard args.count >= 4 else { print("usage: --te-gate <text_encoder> <golden>"); exit(2) }
-        Device.setDefault(device: .cpu)
+        Device.setDefault(device: Device(.cpu))
         let te = try AnimaWeights.loadTextEncoder(file: URL(fileURLWithPath: args[2]), dtype: .float32)
         FileHandle.standardError.write("[te] loaded (strict key match)\n".data(using: .utf8)!)
         let golden = try MLX.loadArrays(url: URL(fileURLWithPath: args[3]))
@@ -76,7 +76,7 @@ do {
         exit(ok ? 0 : 1)
     case "--adapter-gate":
         guard args.count >= 4 else { print("usage: --adapter-gate <adapter> <golden>"); exit(2) }
-        Device.setDefault(device: .cpu)
+        Device.setDefault(device: Device(.cpu))
         let ad = try AnimaWeights.loadAdapter(file: URL(fileURLWithPath: args[2]), dtype: .float32)
         FileHandle.standardError.write("[adapter] loaded (strict key match)\n".data(using: .utf8)!)
         let golden = try MLX.loadArrays(url: URL(fileURLWithPath: args[3]))
@@ -89,7 +89,7 @@ do {
         exit(ok ? 0 : 1)
     case "--dit-gate":
         guard args.count >= 4 else { print("usage: --dit-gate <transformer> <golden>"); exit(2) }
-        Device.setDefault(device: .cpu)
+        Device.setDefault(device: Device(.cpu))
         let dit = try AnimaWeights.loadDiT(file: URL(fileURLWithPath: args[2]), dtype: .float32)
         FileHandle.standardError.write("[dit] loaded (strict key match)\n".data(using: .utf8)!)
         let golden = try MLX.loadArrays(url: URL(fileURLWithPath: args[3]))
@@ -116,7 +116,7 @@ do {
 
     case "--e2e-gate":
         guard args.count >= 7 else { print("usage: --e2e-gate <transformer> <text_encoder> <adapter> <vae> <golden>"); exit(2) }
-        Device.setDefault(device: .cpu)
+        Device.setDefault(device: Device(.cpu))
         let pipe = try AnimaPipeline.load(
             transformer: URL(fileURLWithPath: args[2]), textEncoder: URL(fileURLWithPath: args[3]),
             adapter: URL(fileURLWithPath: args[4]), vae: URL(fileURLWithPath: args[5]), dtype: .float32)
