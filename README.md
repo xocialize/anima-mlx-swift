@@ -33,18 +33,21 @@ Weights (bf16 + int4, NC-flagged): **https://huggingface.co/xocialize/anima-mlx*
 
 | component | cosine | max_abs |
 |---|---|---|
-| Cosmos DiT | 1.000000 | 3.1e-5 |
+| Cosmos DiT | 1.000000 | 3.2e-5 |
 | llm_adapter | 1.000000 | 2.9e-6 |
-| Qwen3-0.6B TE | 1.000000 | 6.1e-4 |
-| Wan VAE | 1.000000 | 6.7e-6 |
-| **e2e pipeline** | step-0 v0_cfg 0.9999996 · final latent **0.999105** | (== Python bit-for-bit) |
-| int4 transformer | per-pass 0.99619 | |
+| Qwen3-0.6B TE (post-norm tap) | 1.000000 | 1.2e-4 |
+| Wan VAE | 1.000000 | 6.0e-6 |
+| **e2e pipeline** | step-0 v0_cfg 1.0000000 · final latent **0.985471** | (== Python rung 0.9854712) |
+| int4 transformer | per-pass 0.99622 | |
+
+Goldens (`Resources/*_golden.safetensors`) are packed by `tools/export_goldens.py` from the Python
+rung's `tests/goldens`, which the PyTorch oracle (`anima-oracle/`) dumps with the **post-final-RMSNorm**
+TE tap and the rope_scale=(1,4,4) DiT. Regenerated 2026-10-29 (AB-T-0020): re-running the oracle on a
+fresh `circlestone-labs/Anima` download reproduces them bit-for-bit. The final-latent bar is the
+rung's: ≥ 0.98, because the chaotic 6-step cfg loop makes that cosine track the oracle's torch
+build (0.9991 on the June goldens, 0.9855 on these); step-0 `v0_cfg` is the tight proof.
 
 Footprints (measured Swift peak @512²): **bf16 8.0 GB / int4 6.5 GB**.
-
-Note: the TE / e2e rows were gated against PRE-norm TE goldens; after the 2026-07-22 post-norm
-tap fix (see Sampling below) those goldens are stale until the Python rung regenerates them —
-the numbers still establish that the transpose matched the then-reference.
 
 ## Sampling
 

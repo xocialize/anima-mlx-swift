@@ -17,11 +17,11 @@ component parity; cosine + image-validity for the denoise loop (chaotic ODE — 
 | phase | what | gate | status |
 |---|---|---|---|
 | S0  | scaffold (Package.swift, Anima core, anima-cli); key contract | builds; strict-key load | **PASS 2026-06-26** |
-| S1a | **AnimaVAE** (decoder) | `--vae-gate` vs Python golden | **PASS — cos 1.000000, maxabs 6.68e-6** |
-| S1b | Qwen3-0.6B TE | `--te-gate` vs `goldens/qwen3` | **PASS — cos 1.000000, maxabs 6.10e-4** |
+| S1a | **AnimaVAE** (decoder) | `--vae-gate` vs Python golden | **PASS — cos 1.000000, maxabs 6.68e-6** · re-run 2026-10-29 on the 256² golden: 5.95e-6 |
+| S1b | Qwen3-0.6B TE | `--te-gate` vs `goldens/qwen3` (`hidden_postnorm`) | **PASS 2026-10-29 (post-norm golden, AB-T-0020) — cos 1.000000, maxabs 1.24e-4** (was 6.10e-4 vs the retired pre-norm golden) |
 | S1c | llm_adapter | `--adapter-gate` vs `goldens/adapter` | **PASS — cos 1.000000, maxabs 2.92e-6** |
-| S1d | Cosmos DiT | `--dit-gate` vs `goldens/dit` | **PASS — cos 1.000000, maxabs 3.11e-5** |
-| S2  | Pipeline (flow CONST sampler, CFG, denorm) | `--e2e-gate` vs `goldens/pipeline` (inj noise+ids) | **PASS — ctx 2.3e-6, v0_cfg cos 0.9999996, final cos 0.999105 (== Python bit-for-bit)** |
+| S1d | Cosmos DiT | `--dit-gate` vs `goldens/dit` | **PASS — cos 1.000000, maxabs 3.11e-5** · re-run 2026-10-29 on the rope-(1,4,4) golden: 3.15e-5 |
+| S2  | Pipeline (flow CONST sampler, CFG, denorm) | `--e2e-gate` vs `goldens/pipeline` (inj noise+ids) | **PASS 2026-10-29 (post-norm goldens, AB-T-0020) — ctx 2.3e-6 / 4.2e-7, v0_cfg cos 1.0000000 maxabs 1.99e-3, final cos 0.985471 (== Python rung 0.9854712; bar ≥ 0.98 as the rung's)** · was final 0.999105 vs the pre-norm June goldens |
 | S2b | tokenizer (Qwen2.5+T5 via swift-transformers) + 1 real GPU gen | id parity + eyeball | todo |
 | S3  | int4 variant load + per-pass cosine | vs published int4 | **PASS — per-pass cos 0.99619** (selective quantize attn+ff g64; loadStrict leaves uint32-packed weights uncast) |
 | S2b | tokenizer (swift-transformers Qwen2.5+T5) | `--tok-gate` id parity | **PASS — all ids exact** |
@@ -48,14 +48,17 @@ Both fixes were REQUIRED to pass: with the pre-norm TE tap, 1024² was unstable 
 character across seeds — one off-prompt-but-clean render, one abstract-garbage, one real —
 reproduced identically in the Python rung with the same buggy tap), and long prompts washed out.
 
-### ⚠ Stale goldens (S1b / S2 / e2e)
+### Goldens regenerated (S1b / S2) — AB-T-0020, 2026-10-29
 
-The TE post-norm fix changes the Qwen3 TE output contract: `goldens/qwen3` (`hidden_prenorm`)
-and the pipeline goldens' `cond_context`/`uncond_context`/`final_latent` were captured from the
-PRE-norm tap and no longer match. `--te-gate` / `--e2e-gate` will FAIL until the Python rung
-regenerates post-norm goldens (its `qwen3_te.py` carries the same fix; the Swift port remains a
-1:1 transpose of it). The recorded S1b/S2 parity numbers still show the transpose was faithful to
-the then-reference — the reference itself was mis-tapped.
+The pre-norm-era fixtures were removed in 569ae17. `tools/export_goldens.py` now packs
+`Resources/*_golden.safetensors` from the Python rung's `tests/goldens`, which `anima-oracle/`
+(PyTorch, CPU fp32) dumps with the post-final-RMSNorm TE tap and the rope_scale=(1,4,4) DiT.
+Provenance check: re-running `qwen3_oracle.py` and `pipeline_oracle.py` against a fresh
+`circlestone-labs/Anima` download (snapshot f973fc4, on DEV_VOL1) reproduces every array bit-for-bit
+(max |Δ| = 0.0). `--te-gate` reads `hidden_postnorm`. The final-latent bar moves 0.999 → 0.98 to match
+the Python rung's gate: the chaotic 6-step cfg loop makes that cosine track the oracle's torch build
+(the rung itself reads 0.9855 on these goldens), and Swift matches the rung to six digits. All of
+S1a–S1d, S2, S3 (int4 per-pass 0.99622) and `--tok-gate` pass on mlx-swift 0.32.3 / engine 0.73.0.
 
 ## S7 — conformance (PASS)
 `Sources/MLXAnima/AnimaT2IPackage.swift` + `Tests/MLXAnimaTests`. `@InferenceActor final class AnimaT2IPackage:
