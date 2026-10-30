@@ -64,8 +64,8 @@ S1a–S1d, S2, S3 (int4 per-pass 0.99622) and `--tok-gate` pass on mlx-swift 0.3
 `Sources/MLXAnima/AnimaT2IPackage.swift` + `Tests/MLXAnimaTests`. `@InferenceActor final class AnimaT2IPackage:
 ModelPackage`, `AnimaConfiguration: PackageConfiguration, ModelStorable, QuantConfigured`.
 - Manifest: cap **.textToImage** (`T2IContract`), `LicenseDeclaration(weight: LicenseRef-CircleStone-NonCommercial,
-  portCode: .mit)`, provenance circlestone-labs/Anima tier 3, footprints **bf16 8.0 GB / int4 6.5 GB** (measured Swift
-  peak @512²), backends `.metalGPU`, OS macOS 26, chipFloor `.pro`.
+  portCode: .mit)`, provenance circlestone-labs/Anima tier 3, footprints split since v0.4.0 — bf16 resident 5.7 GB / int4 3.2 GB + 7.0 GB activation (phys through
+  MLXServeEngine @1024², `anima-validate`; see README), backends `.metalGPU`, OS macOS 26, chipFloor `.pro`.
 - Tests PASS: `testManifest`, `testConfigurationDefaults`, **`testNonCommercialWeightGated`** (C7 — NC weight
   `rejectedWeight` under `.permissiveOnly`), full `testPackageRun` env-gated.
 - **`--package-gate` PASS**: full ModelPackage contract load(2.6s)→run(8.4s)→unload → valid 512² PNG (460 KB) via

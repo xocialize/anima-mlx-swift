@@ -13,6 +13,8 @@ final class AnimaT2IPackageTests: XCTestCase {
         XCTAssertEqual(m.requirements.requiredBackends, [.metalGPU])
         XCTAssertTrue(m.requirements.footprints.contains { $0.quant == .bf16 })
         XCTAssertTrue(m.requirements.footprints.contains { $0.quant == .int4 })
+        // Split (1.14) footprint: every tier declares a measured activation, not a flat peak.
+        XCTAssertTrue(m.requirements.footprints.allSatisfy { $0.peakActivationBytes > 0 })
     }
 
     /// C7: Non-Commercial weights MUST be denied under the default `.permissiveOnly` policy.
@@ -20,6 +22,20 @@ final class AnimaT2IPackageTests: XCTestCase {
         let result = LicensePolicy.permissiveOnly.evaluate(AnimaT2IPackage.manifest.license)
         XCTAssertFalse(result.isAdmitted, "NC weights must not be admitted under permissiveOnly")
         if case .rejectedWeight = result {} else { XCTFail("expected rejectedWeight, got \(result)") }
+    }
+
+    /// A research host's policy admits it: CircleStone is eval-acknowledged, NVIDIA OML permissive.
+    func testAdmittedUnderAcknowledgedPolicy() {
+        let license = AnimaT2IPackage.manifest.license
+        XCTAssertEqual(license.weightLicenses, [.circleStoneNonCommercial, .nvidiaOpenModel])
+        XCTAssertTrue(LicensePolicy.permissiveOrAcknowledged.evaluate(license).isAdmitted)
+    }
+
+    /// Both notices a host shows (CircleStone NC + "Built on NVIDIA Cosmos"); no display duty missed.
+    func testLicenseNotices() {
+        let license = AnimaT2IPackage.manifest.license
+        XCTAssertEqual(license.notices?.map(\.license), [.circleStoneNonCommercial, .nvidiaOpenModel])
+        XCTAssertTrue(license.missingRequiredDisplayNotices.isEmpty)
     }
 
     func testConfigurationDefaults() {

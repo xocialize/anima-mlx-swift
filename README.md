@@ -47,7 +47,16 @@ fresh `circlestone-labs/Anima` download reproduces them bit-for-bit. The final-l
 rung's: ≥ 0.98, because the chaotic 6-step cfg loop makes that cosine track the oracle's torch
 build (0.9991 on the June goldens, 0.9855 on these); step-0 `v0_cfg` is the tight proof.
 
-Footprints (measured Swift peak @512²): **bf16 8.0 GB / int4 6.5 GB**.
+Footprints (split, `phys_footprint` through `MLXServeEngine` — `swift run -c release anima-validate
+<snapshot> bf16|int4 1024`, 30 steps, kernel high-water):
+
+| tier | resident (declared) | activation @1024² (declared) | measured floor / act / peak @1024² | act @512² |
+|---|---|---|---|---|
+| bf16 | 5.7 GB | 7.0 GB | 5.62 / 6.72 / 12.34 GB | 3.98 GB |
+| int4 | 3.2 GB | 7.0 GB | 3.09 / 6.66 / 9.75 GB | 4.18 GB |
+
+The old flat 8.0 / 6.5 GB read MLX's allocator, not phys, and under-declared the 1024² peak. int4 is
+opt-in: weight-only int4 on the DiT gives no activation saving and a visibly weaker composition.
 
 ## Sampling
 

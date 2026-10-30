@@ -43,14 +43,37 @@ public final class AnimaT2IPackage: ModelPackage {
 
     public nonisolated static var manifest: PackageManifest {
         PackageManifest(
-            // C7 weight license: CircleStone Non-Commercial (built on NVIDIA Cosmos). C8 port code: MIT.
-            license: LicenseDeclaration(weightLicense: "LicenseRef-CircleStone-NonCommercial", portCodeLicense: .mit),
+            // C7 weight license: CircleStone Non-Commercial v1.2 — and, as a "Derivative Model" of
+            // Cosmos-Predict2-2B-Text2Image, the NVIDIA Open Model License insofar as it applies
+            // (upstream README). C8 port code: MIT. The NC weight is eval-acknowledged only:
+            // rejectedWeight under .permissiveOnly, admitted under .permissiveOrAcknowledged.
+            license: LicenseDeclaration(
+                weightLicense: .circleStoneNonCommercial,
+                additionalWeightLicenses: [.nvidiaOpenModel],
+                portCodeLicense: .mit,
+                notices: [
+                    LicenseNotice(
+                        text: "Anima by CircleStone Labs, under the CircleStone Labs Non-Commercial License: "
+                            + "non-commercial, non-production use only.",
+                        display: .informational, license: .circleStoneNonCommercial,
+                        termsURL: "https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md"),
+                    LicenseNotice(
+                        text: "Built on NVIDIA Cosmos. Licensed by NVIDIA Corporation under the NVIDIA Open Model License.",
+                        display: .informational, license: .nvidiaOpenModel,
+                        termsURL: "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"),
+                ]),
             provenance: Provenance(sourceRepo: "circlestone-labs/Anima", revision: "main", tier: 3),
             requirements: RequirementsManifest(
-                // residentBytes = measured Swift peak unified memory @512² (see PORTING-SPEC).
+                // Split footprint, phys_footprint through MLXServeEngine (`anima-validate`, kernel
+                // high-water), 30 steps cfg 5. resident = post-load floor; peakActivation = the
+                // 1024² run (the envelope's max), rounded up — 512² reads 3.98 / 4.18 GB.
+                //   bf16: floor 5.62 GB, act 6.72 GB, peak 12.34 GB
+                //   int4: floor 3.09 GB, act 6.66 GB, peak  9.75 GB
                 footprints: [
-                    QuantFootprint(quant: .bf16, residentBytes: 8_000_000_000),
-                    QuantFootprint(quant: .int4, residentBytes: 6_500_000_000),
+                    QuantFootprint(quant: .bf16, residentBytes: 5_700_000_000,
+                                   peakActivationBytes: 7_000_000_000),
+                    QuantFootprint(quant: .int4, residentBytes: 3_200_000_000,
+                                   peakActivationBytes: 7_000_000_000),
                 ],
                 requiredBackends: [.metalGPU],
                 os: OSRequirement(minMacOS: SemanticVersion(major: 26, minor: 0, patch: 0)),

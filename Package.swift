@@ -12,6 +12,7 @@ let package = Package(
     products: [
         .library(name: "Anima", targets: ["Anima"]),
         .library(name: "MLXAnima", targets: ["MLXAnima"]),
+        .executable(name: "anima-validate", targets: ["AnimaValidate"]),
     ],
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.30.0"),
@@ -57,6 +58,19 @@ let package = Package(
                 .product(name: "MLXRandom", package: "mlx-swift"),
             ],
             path: "Sources/AnimaCLI"
+        ),
+        // The authoritative split footprint: through the real MLXServeEngine (register → prepare →
+        // run) with phys_footprint, as opposed to --package-gate which drives the package directly.
+        .executableTarget(
+            name: "AnimaValidate",
+            dependencies: [
+                "MLXAnima",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXToolKit", package: "mlx-engine-swift"),
+                .product(name: "MLXServeCore", package: "mlx-engine-swift"),
+                .product(name: "MLXEngineTestKit", package: "mlx-engine-swift"),
+            ],
+            path: "Sources/Validate"
         ),
         .testTarget(
             name: "MLXAnimaTests",
